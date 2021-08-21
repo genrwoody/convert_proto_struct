@@ -1,5 +1,7 @@
 # convert_proto_struct
 
+[中文](./README.md) | [English](./README.en-US.md)
+
 #### 介绍
 转换Protobuf消息类为c++结构体, 或者转换c++结构体为Protobuf消息类
 
@@ -18,5 +20,6 @@
 
 不支持: 位域
 
-使用方法可参考test中的示例
+#### 使用方法
+可参考test中的示例
 
