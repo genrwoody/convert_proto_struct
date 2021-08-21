@@ -1,37 +1,22 @@
 # convert_proto_struct
 
 #### 介绍
-convert protobuf message to struct, or convert struct to protobuf message.
+转换Protobuf消息类为c++结构体, 或者转换c++结构体为Protobuf消息类
 
-#### 软件架构
-软件架构说明
+支持的Protobuf类型:
+1. 基本类型, 如int32, int64, bool, Enum, string等
+2. 容器, repeated, 以string做为key的map
 
+不支持: oneof, 以非string做为key的map
 
-#### 安装教程
+支持的结构体类型:
+1. 结构体必须按1字节对齐
+2. 基本类型, 如int, int64_t, bool, enum等
+3. 字符串必须是std::string
+4. repeated对应的类型为std::vector
+5. map对应的类型必须是std::map, key也必须是string
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+不支持: 位域
 
-#### 使用说明
+使用方法可参考test中的示例
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
-
-
-#### 特技
-
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
