@@ -1,4 +1,13 @@
-﻿#include "convert_proto_struct.h"
+#include "convert_proto_struct.h"
+
+#include <string>
+#include <vector>
+#include <map>
+#include <google/protobuf/message.h>
+
+using google::protobuf::Descriptor;
+using google::protobuf::FieldDescriptor;
+using google::protobuf::Reflection;
 
 namespace cps
 {
@@ -19,7 +28,7 @@ inline int GetFieldSize(const FieldDescriptor *field)
 }
 
 // @brief Get the size of struct which is match the protobuf message.
-int GetMessageStructSize(const Descriptor *desc)
+static int GetMessageStructSize(const Descriptor *desc)
 {
 	static_assert(sizeof(std::string) % 8 == 0,
 		"error: sizeof std::string is not align as 64 bit.");
@@ -72,6 +81,12 @@ int GetMessageStructSize(const Descriptor *desc)
 		}
 	}
 	return size;
+}
+
+// @brief Get the size of struct which is match the protobuf message.
+int GetMessageStructSize(const Message &msg)
+{
+	return GetMessageStructSize(msg.GetDescriptor());
 }
 
 // protobuf does not provide generic template function, so we wrap it.
@@ -139,7 +154,7 @@ void SetProtoValue(const uint8_t *&bytes, Message &msg,
 	}
 }
 
-bool SetProtoMessage(const uint8_t *&bytes, Message &msg,
+static bool SetProtoMessage(const uint8_t *&bytes, Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
 	int size = GetMessageStructSize(field->message_type());
@@ -340,7 +355,7 @@ bool SetStructMap(uint8_t *bytes, const Message &msg,
 	return true;
 }
 
-bool SetStructMap(uint8_t *bytes, size_t size, const Message &msg,
+static bool SetStructMap(uint8_t *bytes, size_t size, const Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
 	size -= sizeof(std::string);
@@ -360,7 +375,7 @@ bool SetStructMap(uint8_t *bytes, size_t size, const Message &msg,
 	return false;
 }
 
-bool SetStructMessage(uint8_t *&bytes, const Message &msg,
+static bool SetStructMessage(uint8_t *&bytes, const Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
 	int size = GetMessageStructSize(field->message_type());
