@@ -23,6 +23,7 @@ message Message2 {
 	message Message3 {
 		map<string, int64> member1 =2;
 		repeated int64 member2 = 1;
+		map<int32, string> member3 = 3;
 	}
 	map<string, Message3> member1 = 1;
 	repeated Message1 member2 = 2;

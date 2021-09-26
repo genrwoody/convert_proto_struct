@@ -31,6 +31,7 @@ struct Message2
 	{
 		std::map<std::string, int64_t> member1;
 		std::vector<int64_t> member2;
+		std::map<int32_t, std::string> member3;
 	};
 	std::map<std::string, Message3> member1;
 	std::vector<Message1> member2;

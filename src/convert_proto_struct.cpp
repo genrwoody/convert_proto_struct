@@ -32,11 +32,11 @@ static int GetMessageStructSize(const Descriptor *desc)
 {
 	static_assert(sizeof(std::string) % 8 == 0,
 		"error: sizeof std::string is not align as 64 bit.");
-	static_assert(sizeof(std::vector<int8_t>) % 8 == 0 &&
-		sizeof(std::vector<int8_t>) == sizeof(std::vector<int64_t>),
+	static_assert(sizeof(std::vector<char>) % 8 == 0 &&
+		sizeof(std::vector<char>) == sizeof(std::vector<char[97]>),
 		"error: sizeof std::vector is variable, can not deal with it.");
-	static_assert(sizeof(std::map<int8_t, int8_t>) % 8 == 0 &&
-		sizeof(std::map<int8_t, int8_t>) == sizeof(std::map<int64_t, int64_t>),
+	static_assert(sizeof(std::map<char, char>) % 8 == 0 &&
+		sizeof(std::map<char, char>) == sizeof(std::map<char[97], char[97]>),
 		"error: sizeof std::map is variable, can not deal with it.");
 
 	int size = 0;
@@ -66,9 +66,9 @@ static int GetMessageStructSize(const Descriptor *desc)
 		case FieldDescriptor::CPPTYPE_MESSAGE:
 		{
 			if (field->is_map()) {
-				size += sizeof(std::map<std::string, int>);
+				size += sizeof(std::map<char, char>);
 			} else if (field->is_repeated()) {
-				size += sizeof(std::vector<int>);
+				size += sizeof(std::vector<char>);
 			} else {
 				int subsize = GetMessageStructSize(field->message_type());
 				if (subsize == 0) return 0;
@@ -154,36 +154,66 @@ void SetProtoValue(const uint8_t *&bytes, Message &msg,
 	}
 }
 
+template<typename Ty>
+bool SetProtoMap(const uint8_t *&bytes, Message &msg,
+	const Reflection *refl, const FieldDescriptor *field)
+{
+	auto &values = *(std::map<Ty, uint8_t>*)bytes;
+	for (auto &pair : values) {
+		auto submsg = refl->AddMessage(&msg, field);
+		auto data = (const uint8_t *)&pair;
+		if (!StructToProtoInternal(data, *submsg)) return false;
+	}
+	bytes += sizeof(std::map<Ty, uint8_t>);
+	return true;
+}
+
+static bool SetProtoMap(const uint8_t *&bytes, Message &msg,
+	const Reflection *refl, const FieldDescriptor *field)
+{
+	auto desc = field->message_type();
+	if (desc->field_count() != 2) return false; // map have 2 field.
+	auto key = desc->field(0);
+	switch (key->cpp_type()) {
+	case FieldDescriptor::CPPTYPE_INT32:
+		return SetProtoMap<int32_t>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_INT64:
+		return SetProtoMap<int64_t>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_UINT32:
+		return SetProtoMap<uint32_t>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_UINT64:
+		return SetProtoMap<uint64_t>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_STRING:
+		return SetProtoMap<std::string>(bytes, msg, refl, field);
+	default:
+		return false;
+	}
+}
+
 static bool SetProtoMessage(const uint8_t *&bytes, Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
+	if (!field->is_repeated()) {
+		auto submsg = refl->MutableMessage(&msg, field);
+		return StructToProtoInternal(bytes, *submsg);
+	}
+	if (field->is_map()) {
+		return SetProtoMap(bytes, msg, refl, field);
+	}
+	auto &values = *(std::vector<uint8_t>*)bytes;
+	const uint8_t *data = values.data();
 	int size = GetMessageStructSize(field->message_type());
 	if (size == 0) return false;
-	if (field->is_map()) {
-		auto &values = *(std::map<std::string, uint8_t>*)bytes;
-		for (auto &pair : values) {
-			auto submsg = refl->AddMessage(&msg, field);
-			auto data = (const uint8_t *)&pair;
-			if (!StructToProtoInternal(data, *submsg)) return false;
-		}
-		bytes += sizeof(std::map<std::string, uint8_t>);
-	} else if (field->is_repeated()) {
-		auto &values = *(std::vector<uint8_t>*)bytes;
-		const uint8_t *data = values.data();
-		if (values.size() % size) {
-			// The element in vector has difference size?
-			return false; // should never reached!
-		}
-		int count = (int)values.size() / size;
-		for (int j = 0; j < count; ++j) {
-			auto submsg = refl->AddMessage(&msg, field);
-			if (!StructToProtoInternal(data, *submsg)) return false;
-		}
-		bytes += sizeof(std::vector<uint8_t>);
-	} else {
-		auto submsg = refl->MutableMessage(&msg, field);
-		if (!StructToProtoInternal(bytes, *submsg)) return false;
+	if (values.size() % size) {
+		// The element in vector has difference size?
+		return false; // should never reached!
 	}
+	int count = (int)values.size() / size;
+	for (int j = 0; j < count; ++j) {
+		auto submsg = refl->AddMessage(&msg, field);
+		if (!StructToProtoInternal(data, *submsg)) return false;
+	}
+	bytes += sizeof(std::vector<uint8_t>);
 	return true;
 }
 
@@ -331,31 +361,51 @@ void SetStructValue(uint8_t *&bytes, const Message &msg,
 	}
 }
 
-template<int N>
-bool SetStructMap(uint8_t *bytes, const Message &msg,
+template<typename Tk, typename Tv>
+bool SetStructMap(uint8_t *&bytes, const Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
-	struct holder { uint8_t member[N]; };
-	auto &map = ConvertTo<std::map<std::string, holder>>(bytes);
+	auto &map = ConvertTo<std::map<Tk, Tv>>(bytes);
 	int count = refl->FieldSize(msg, field);
 	for (int i = 0; i < count; ++i) {
 		auto &submsg = refl->GetRepeatedMessage(msg, field, i);
 		auto subrefl = submsg.GetReflection();
 		auto subdesc = submsg.GetDescriptor();
 		auto subfield = subdesc->field(0);
-		if (subfield->cpp_type() != FieldDescriptor::CPPTYPE_STRING) {
-			// The key of map must be a string, it is not a string now!
-			return false;
-		}
-		std::string key = subrefl->GetString(submsg, subfield);
+		Tk key = ProtoGet<Tk>(submsg, subrefl, subfield);
 		auto &value = map[key];
 		auto data = (uint8_t*)&value;
 		if (!ProtoToStructInternal(data, submsg, 1)) return false;
 	}
+	bytes += sizeof(std::map<Tk, Tv>);
 	return true;
 }
 
-static bool SetStructMap(uint8_t *bytes, size_t size, const Message &msg,
+template<int N>
+bool SetStructMap(uint8_t *&bytes, const Message &msg,
+	const Reflection *refl, const FieldDescriptor *field)
+{
+	auto desc = field->message_type();
+	if (desc->field_count() != 2) return false; // map have 2 field.
+	struct holder { uint8_t member[N]; };
+	auto key = desc->field(0);
+	switch (key->cpp_type()) {
+	case FieldDescriptor::CPPTYPE_INT32:
+		return SetStructMap<int32_t, holder>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_INT64:
+		return SetStructMap<int64_t, holder>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_UINT32:
+		return SetStructMap<uint32_t, holder>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_UINT64:
+		return SetStructMap<uint64_t, holder>(bytes, msg, refl, field);
+	case FieldDescriptor::CPPTYPE_STRING:
+		return SetStructMap<std::string, holder>(bytes, msg, refl, field);
+	default:
+		return false;
+	}
+}
+
+static bool SetStructMap(uint8_t *&bytes, size_t size, const Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
 	size -= sizeof(std::string);
@@ -378,24 +428,24 @@ static bool SetStructMap(uint8_t *bytes, size_t size, const Message &msg,
 static bool SetStructMessage(uint8_t *&bytes, const Message &msg,
 	const Reflection *refl, const FieldDescriptor *field)
 {
+	if (!field->is_repeated()) {
+		auto &submsg = refl->GetMessage(msg, field);
+		return ProtoToStructInternal(bytes, submsg, 0);
+	}
 	int size = GetMessageStructSize(field->message_type());
 	if (field->is_map()) {
-		if (!SetStructMap(bytes, size, msg, refl, field)) return false;
-		bytes += sizeof(std::map<std::string, uint8_t>);
-	} else if (field->is_repeated()) {
-		auto &values = *(std::vector<uint8_t>*)bytes;
-		int count = refl->FieldSize(msg, field);
-		values.resize(count * size);
-		auto data = (uint8_t*)values.data();
-		for (int j = 0; j < count; ++j) {
-			auto &submsg = refl->GetRepeatedMessage(msg, field, j);
-			if (!ProtoToStructInternal(data, submsg, 0)) return false;
-		}
-		bytes += sizeof(std::vector<uint8_t>);
-	} else {
-		auto &submsg = refl->GetMessage(msg, field);
-		if (!ProtoToStructInternal(bytes, submsg, 0)) return false;
+		return SetStructMap(bytes, size, msg, refl, field);
 	}
+	// deal repeated message as vector
+	auto &values = *(std::vector<uint8_t>*)bytes;
+	int count = refl->FieldSize(msg, field);
+	values.resize(count * size);
+	auto data = (uint8_t*)values.data();
+	for (int j = 0; j < count; ++j) {
+		auto &submsg = refl->GetRepeatedMessage(msg, field, j);
+		if (!ProtoToStructInternal(data, submsg, 0)) return false;
+	}
+	bytes += sizeof(std::vector<uint8_t>);
 	return true;
 }
 
