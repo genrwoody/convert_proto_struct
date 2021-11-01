@@ -12,7 +12,7 @@ Support Protobuf Type:
 Unsupport: oneof
 
 Support struct:
-1. Must align as 1 byte.
+1. Do NOT set alignment for struct.
 2. Fundamental types, such as int, int64_t, bool, enum and so on.
 3. String should be std::string.
 4. The repeated should be std::vector.

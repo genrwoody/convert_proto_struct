@@ -1,4 +1,4 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <cstdlib>
 #include <cstdio>
@@ -20,6 +20,8 @@ int main()
 	msg3.member1.emplace("msg3mem1key3", 98798768765);
 	msg3.member2.emplace_back(6783443);
 	msg3.member2.emplace_back(8763456);
+	msg3.member3.emplace(123, "msg3mem3value1");
+	msg3.member3.emplace(456, "msg3mem3value2");
 	msg2.member1.emplace("msg2mem1key1", msg3);
 	msg2.member1.emplace("msg2mem1key2", msg3);
 	msg2.member1.emplace("msg2mem1key3", msg3);

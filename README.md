@@ -12,7 +12,7 @@
 不支持: oneof
 
 支持的结构体类型:
-1. 结构体必须按1字节对齐
+1. 结构体不能设置对齐参数
 2. 基本类型, 如int, int64_t, bool, enum等
 3. 字符串必须是std::string
 4. repeated对应的类型为std::vector

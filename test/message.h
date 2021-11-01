@@ -4,8 +4,6 @@
 #include <string>
 #include <map>
 
-#pragma pack(1)
-
 enum Enum
 {
 	EnFlag1,
@@ -31,7 +29,7 @@ struct Message2
 	{
 		std::map<std::string, int64_t> member1;
 		std::vector<int64_t> member2;
-		std::map<int32_t, std::string> member3;
+		std::map<int64_t, std::string> member3;
 	};
 	std::map<std::string, Message3> member1;
 	std::vector<Message1> member2;
@@ -40,6 +38,4 @@ struct Message2
 	Message1 member5;
 	Message3 member6;
 };
-
-#pragma pack()
 
