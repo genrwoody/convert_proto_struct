@@ -15,6 +15,7 @@
 #ifndef _CONVERT_PROTO_STRUCT_INC_
 #define _CONVERT_PROTO_STRUCT_INC_
 
+#include <cstddef>
 #include <cstdint>
 
 namespace google { namespace protobuf { class Message; } }
@@ -24,23 +25,32 @@ namespace cps
 
 using google::protobuf::Message;
 
-bool StructToProto(const uint8_t *bytes, size_t size, Message &msg);
-bool ProtoToStruct(const Message &msg, uint8_t *bytes, size_t size);
+// @brief Convert struct to protobuf message.
+// @param[in] bytes: pointer to struct
+// @param[in] size: sizeof struct
+// @param[out] msg: protobuf message
+// @return true for success, or false for failed.
+bool StructToProto(const void *bytes, size_t size, Message &msg);
+
+// @brief Convert protobuf message to struct.
+// @param[in] msg: protobuf message
+// @param[out] bytes: pointer to struct
+// @param[in] size: sizeof struct
+// @return true for success, or false for failed.
+bool ProtoToStruct(const Message &msg, void *bytes, size_t size);
 
 // @brief Convert struct to protobuf message.
 template<typename STRUCT, typename PROTO>
 bool StructToProto(const STRUCT &in, PROTO &out)
 {
-	const uint8_t *buffer = (const uint8_t*)&in;
-	return StructToProto(buffer, sizeof(STRUCT), out);
+	return StructToProto(&in, sizeof(STRUCT), out);
 }
 
 // @brief Convert protobuf message to struct.
 template<typename PROTO, typename STRUCT>
 bool ProtoToStruct(const PROTO &in, STRUCT &out)
 {
-	uint8_t *buffer = (uint8_t*)&out;
-	return ProtoToStruct(in, buffer, sizeof(STRUCT));
+	return ProtoToStruct(in, &out, sizeof(STRUCT));
 }
 
 } // namespace cps

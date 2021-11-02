@@ -173,7 +173,7 @@ public:
 private:
 	// read a member from struct
 	template<typename Ty>
-	const Ty &read()
+	const Ty &read_member()
 	{
 		int remain = _align - _pos % _align;
 		_pos += remain % alignof(Ty);
@@ -183,7 +183,7 @@ private:
 	}
 
 	// read a struct member from struct
-	StructReader read(Message &msg)
+	StructReader child_reader(Message &msg)
 	{
 		StructReader reader(msg, nullptr);
 		int remain = _align - _pos % _align;
@@ -198,12 +198,12 @@ private:
 	bool set_proto_value(const FieldDescriptor *field)
 	{
 		if (field->is_repeated()) {
-			auto &values = read<std::vector<Ty>>();
+			auto &values = read_member<std::vector<Ty>>();
 			for (const Ty &value : values) {
 				ProtoAdd<Ty>(value, _msg, _refl, field);
 			}
 		} else {
-			ProtoSet<Ty>(read<Ty>(), _msg, _refl, field);
+			ProtoSet<Ty>(read_member<Ty>(), _msg, _refl, field);
 		}
 		return true;
 	}
@@ -212,7 +212,7 @@ private:
 	template<typename Ty>
 	bool set_proto_map(const FieldDescriptor *field)
 	{
-		auto &values = read<std::map<Ty, Ty>>();
+		auto &values = read_member<std::map<Ty, Ty>>();
 		for (auto &pair : values) {
 			auto submsg = _refl->AddMessage(&_msg, field);
 			auto bytes = (const uint8_t*)&pair;
@@ -252,7 +252,7 @@ bool StructReader::set_proto_value<Message>(const FieldDescriptor *field)
 {
 	if (!field->is_repeated()) {
 		auto submsg = _refl->MutableMessage(&_msg, field);
-		auto reader = read(*submsg);
+		auto reader = child_reader(*submsg);
 		return reader.to_proto();
 	}
 	if (field->is_map()) {
@@ -264,13 +264,13 @@ bool StructReader::set_proto_value<Message>(const FieldDescriptor *field)
 		// an empty struct in vector?
 		return false; // should never reached!
 	}
-	auto &values = read<Vector>();
+	auto &values = read_member<Vector>();
 	const uint8_t *data = values.data();
 	if (values.size() % info.size()) {
 		// The element in vector has difference size?
 		return false; // should never reached!
 	}
-	int count = (int)values.size() / info.size();
+	int count = static_cast<int>(values.size() / info.size());
 	for (int i = 0; i < count; ++i) {
 		auto submsg = _refl->AddMessage(&_msg, field);
 		StructReader reader(*submsg, data);
@@ -327,14 +327,15 @@ bool StructReader::to_proto()
 	return true;
 }
 
-// @brief convert struct to protobuf message.
-// @param bytes: struct memory buffer
-// @param msg:   protobuf message
+// @brief Convert struct to protobuf message.
+// @param[in] bytes: pointer to struct
+// @param[in] size: sizeof struct
+// @param[out] msg: protobuf message
 // @return true for success, or false for failed.
-bool StructToProto(const uint8_t *bytes, size_t size, Message &msg)
+bool StructToProto(const void *bytes, size_t size, Message &msg)
 {
-	StructReader reader(msg, bytes);
-	if (reader.size() != size) {
+	StructReader reader(msg, static_cast<const uint8_t*>(bytes));
+	if (reader.size() != static_cast<int>(size)) {
 		return false; // protobuf message is not match struct
 	}
 	return reader.to_proto();
@@ -415,7 +416,7 @@ private:
 	{
 		size_t *buff = (size_t*)new Ty();
 		size_t begin = (size_t)buff, end = begin + sizeof(Ty);
-		for (int i = 0; i < (int)(sizeof(Ty) / sizeof(size_t)); ++i) {
+		for (size_t i = 0; i < sizeof(Ty) / sizeof(size_t); ++i) {
 			if (begin <= buff[i] && buff[i] <= end) {
 				data[i] = (size_t)data + buff[i] - begin;
 			} else {
@@ -432,7 +433,7 @@ private:
 		if (std::is_trivial<Ty>::value) return *(Ty*)data;
 		// if the object is not constructed, construct it;
 		bool needinit = true;
-		for (int i = 0; i < (int)sizeof(Ty) && needinit; i++) {
+		for (size_t i = 0; i < sizeof(Ty) && needinit; i++) {
 			if (data[i] != 0) needinit = false;
 		}
 		if (needinit) init_object<Ty>((size_t*)data);
@@ -441,7 +442,7 @@ private:
 
 	// read a member from struct
 	template<typename Ty>
-	Ty &read()
+	Ty &read_member()
 	{
 		int remain = _align - _pos % _align;
 		_pos += remain % alignof(Ty);
@@ -451,7 +452,7 @@ private:
 	}
 
 	// read a struct member from struct
-	StructWriter read(const Message &msg)
+	StructWriter child_writer(const Message &msg)
 	{
 		StructWriter writer(msg, nullptr);
 		int remain = _align - _pos % _align;
@@ -466,14 +467,14 @@ private:
 	bool set_struct_value(const FieldDescriptor *field)
 	{
 		if (field->is_repeated()) {
-			auto &values = read<std::vector<Ty>>();
+			auto &values = read_member<std::vector<Ty>>();
 			int count = _refl->FieldSize(_msg, field);
 			for (int i = 0; i < count; ++i) {
 				Ty value = ProtoGet<Ty>(_msg, _refl, field, i);
 				values.push_back(value);
 			}
 		} else {
-			auto &value = read<Ty>();
+			auto &value = read_member<Ty>();
 			value = ProtoGet<Ty>(_msg, _refl, field);
 		}
 		return true;
@@ -492,7 +493,7 @@ private:
 template<typename Key, typename Value>
 bool StructWriter::set_struct_map(const FieldDescriptor *field)
 {
-	auto &map = read<std::map<Key, Value>>();
+	auto &map = read_member<std::map<Key, Value>>();
 	int count = _refl->FieldSize(_msg, field);
 	for (int i = 0; i < count; ++i) {
 		auto &submsg = _refl->GetRepeatedMessage(_msg, field, i);
@@ -560,7 +561,7 @@ bool StructWriter::set_struct_map(const FieldDescriptor *field)
 		// map should have 2 field.
 		return false; // should never reached!
 	}
-	StructInfo info(desc);
+	StructInfo info(desc); // info is std::pair<key, value>
 	auto key = desc->field(0);
 	int size = 0;
 	switch (key->cpp_type()) {
@@ -582,40 +583,32 @@ bool StructWriter::set_struct_map(const FieldDescriptor *field)
 	}
 	switch (info.align()) {
 	case 4:
-		if (size <= 0x0008) return set_struct_map<0x0008, 4>(field);
-		if (size <= 0x0010) return set_struct_map<0x0010, 4>(field);
-		if (size <= 0x0020) return set_struct_map<0x0020, 4>(field);
-		if (size <= 0x0040) return set_struct_map<0x0040, 4>(field);
-		if (size <= 0x0080) return set_struct_map<0x0080, 4>(field);
-		if (size <= 0x0100) return set_struct_map<0x0100, 4>(field);
-		if (size <= 0x0200) return set_struct_map<0x0200, 4>(field);
-		if (size <= 0x0400) return set_struct_map<0x0400, 4>(field);
-		if (size <= 0x0800) return set_struct_map<0x0800, 4>(field);
-		if (size <= 0x1000) return set_struct_map<0x1000, 4>(field);
-		if (size <= 0x2000) return set_struct_map<0x2000, 4>(field);
-		if (size <= 0x4000) return set_struct_map<0x4000, 4>(field);
-		if (size <= 0x8000) return set_struct_map<0x8000, 4>(field);
+		if (size <= 0x008) return set_struct_map<0x008, 4>(field);
+		if (size <= 0x010) return set_struct_map<0x010, 4>(field);
+		if (size <= 0x020) return set_struct_map<0x020, 4>(field);
+		if (size <= 0x040) return set_struct_map<0x040, 4>(field);
+		if (size <= 0x080) return set_struct_map<0x080, 4>(field);
+		if (size <= 0x100) return set_struct_map<0x100, 4>(field);
+		if (size <= 0x200) return set_struct_map<0x200, 4>(field);
+		if (size <= 0x400) return set_struct_map<0x400, 4>(field);
+		if (size <= 0x800) return set_struct_map<0x800, 4>(field);
 		break;
 	case 8:
-		if (size <= 0x0008) return set_struct_map<0x0008, 8>(field);
-		if (size <= 0x0010) return set_struct_map<0x0010, 8>(field);
-		if (size <= 0x0020) return set_struct_map<0x0020, 8>(field);
-		if (size <= 0x0040) return set_struct_map<0x0040, 8>(field);
-		if (size <= 0x0080) return set_struct_map<0x0080, 8>(field);
-		if (size <= 0x0100) return set_struct_map<0x0100, 8>(field);
-		if (size <= 0x0200) return set_struct_map<0x0200, 8>(field);
-		if (size <= 0x0400) return set_struct_map<0x0400, 8>(field);
-		if (size <= 0x0800) return set_struct_map<0x0800, 8>(field);
-		if (size <= 0x1000) return set_struct_map<0x1000, 8>(field);
-		if (size <= 0x2000) return set_struct_map<0x2000, 8>(field);
-		if (size <= 0x4000) return set_struct_map<0x4000, 8>(field);
-		if (size <= 0x8000) return set_struct_map<0x8000, 8>(field);
+		if (size <= 0x008) return set_struct_map<0x008, 8>(field);
+		if (size <= 0x010) return set_struct_map<0x010, 8>(field);
+		if (size <= 0x020) return set_struct_map<0x020, 8>(field);
+		if (size <= 0x040) return set_struct_map<0x040, 8>(field);
+		if (size <= 0x080) return set_struct_map<0x080, 8>(field);
+		if (size <= 0x100) return set_struct_map<0x100, 8>(field);
+		if (size <= 0x200) return set_struct_map<0x200, 8>(field);
+		if (size <= 0x400) return set_struct_map<0x400, 8>(field);
+		if (size <= 0x800) return set_struct_map<0x800, 8>(field);
 		break;
 	default:
 		// the alignof map pair is 4 or 8 bytes.
 		return false; // should never reached!
 	}
-	// The struct is too big, max sizeof struct is 0x8000;
+	// The struct is too big, max sizeof struct is 0x800;
 	return false;
 }
 
@@ -624,7 +617,7 @@ bool StructWriter::set_struct_value<Message>(const FieldDescriptor *field)
 {
 	if (!field->is_repeated()) {
 		auto &submsg = _refl->GetMessage(_msg, field);
-		auto writer = read(submsg);
+		auto writer = child_writer(submsg);
 		return writer.from_proto();
 	}
 	if (field->is_map()) {
@@ -636,10 +629,10 @@ bool StructWriter::set_struct_value<Message>(const FieldDescriptor *field)
 		// an empty struct in vector?
 		return false; // should never reached!
 	}
-	auto &values = read<Vector>();
-	size_t count = _refl->FieldSize(_msg, field);
-	values.resize(count * info.size());
-	auto data = (uint8_t*)values.data();
+	auto &values = read_member<Vector>();
+	int count = _refl->FieldSize(_msg, field);
+	values.resize(static_cast<size_t>(count) * info.size());
+	auto data = values.data();
 	for (int i = 0; i < count; ++i) {
 		auto &submsg = _refl->GetRepeatedMessage(_msg, field, i);
 		StructWriter writer(submsg, data);
@@ -696,14 +689,15 @@ bool StructWriter::from_proto()
 	return true;
 }
 
-// @brief convert protobuf message to struct.
-// @param bytes: struct memory buffer
-// @param msg  : protobuf message
-// @param start: if msg is map k-v pair, set start 1, else set it 0
-bool ProtoToStruct(const Message &msg, uint8_t *bytes, size_t size)
+// @brief Convert protobuf message to struct.
+// @param[in] msg: protobuf message
+// @param[out] bytes: pointer to struct
+// @param[in] size: sizeof struct
+// @return true for success, or false for failed.
+bool ProtoToStruct(const Message &msg, void *bytes, size_t size)
 {
-	StructWriter writer(msg, bytes);
-	if (writer.size() != size) {
+	StructWriter writer(msg, static_cast<uint8_t*>(bytes));
+	if (writer.size() != static_cast<int>(size)) {
 		return false; // protobuf message is not match struct
 	}
 	return writer.from_proto();
