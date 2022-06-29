@@ -396,6 +396,7 @@ SPECIAL_TEMPLATE_ProtoGetRepeated(std::string, String)
 class StructWriter : public StructInfo
 {
 private:
+	bool _placement; // need placement new
 	int _pos; // read position
 	uint8_t *_bytes; // the memory of struct
 	const Message &_msg; // protobuf message
@@ -403,6 +404,7 @@ private:
 public:
 	StructWriter(const Message &msg, uint8_t *bytes)
 		: StructInfo(msg.GetDescriptor())
+		, _placement(false)
 		, _pos(0)
 		, _bytes(bytes)
 		, _msg(msg)
@@ -410,45 +412,16 @@ public:
 	// convert from protobuf message
 	bool from_proto();
 private:
-	// Construct Object, depends on the implementation of STL.
-	template<typename Ty>
-	void init_object(size_t *data)
-	{
-		size_t *buff = (size_t*)new Ty();
-		size_t begin = (size_t)buff, end = begin + sizeof(Ty);
-		for (size_t i = 0; i < sizeof(Ty) / sizeof(size_t); ++i) {
-			if (begin <= buff[i] && buff[i] <= end) {
-				data[i] = (size_t)data + buff[i] - begin;
-			} else {
-				data[i] = buff[i];
-			}
-		}
-		delete buff;
-	}
-
-	// cast pointer to Ty.
-	template<typename Ty>
-	inline Ty &cast(uint8_t *data)
-	{
-		if (std::is_trivial<Ty>::value) return *(Ty*)data;
-		// if the object is not constructed, construct it;
-		bool needinit = true;
-		for (size_t i = 0; i < sizeof(Ty) && needinit; i++) {
-			if (data[i] != 0) needinit = false;
-		}
-		if (needinit) init_object<Ty>((size_t*)data);
-		return *(Ty*)data;
-	}
-
 	// read a member from struct
 	template<typename Ty>
 	Ty &read_member()
 	{
 		int remain = _align - _pos % _align;
 		_pos += remain % alignof(Ty);
-		auto &result = cast<Ty>(_bytes + _pos);
+		uint8_t *data = _bytes + _pos;
 		_pos += sizeof(Ty);
-		return result;
+		Ty *result = _placement ? new(data)Ty : (Ty*)data;
+		return *result;
 	}
 
 	// read a struct member from struct
@@ -459,6 +432,7 @@ private:
 		_pos += remain % writer._align;
 		writer._bytes = _bytes + _pos;
 		_pos += writer._size;
+		writer._placement = _placement;
 		return writer;
 	}
 
@@ -507,6 +481,7 @@ bool StructWriter::set_struct_map(const FieldDescriptor *field)
 		}
 		auto data = (uint8_t*)&(pair.first->first);
 		StructWriter writer(submsg, data);
+		writer._placement = true;
 		if (!writer.from_proto()) {
 			return false;
 		}
@@ -636,6 +611,7 @@ bool StructWriter::set_struct_value<Message>(const FieldDescriptor *field)
 	for (int i = 0; i < count; ++i) {
 		auto &submsg = _refl->GetRepeatedMessage(_msg, field, i);
 		StructWriter writer(submsg, data);
+		writer._placement = true;
 		if (!writer.from_proto()) {
 			return false;
 		}
