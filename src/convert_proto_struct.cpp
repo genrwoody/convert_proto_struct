@@ -98,6 +98,9 @@ StructInfo::StructInfo(const Descriptor *desc)
 			return; // never reached!
 		}
 	}
+	if (_size % _align) {
+		_size += _align - _size % _align;
+	}
 }
 
 // ==================== convert struct to protobuf message ====================

@@ -17,6 +17,7 @@ message Message1 {
 	string member7 = 5;
 	map<string, int32> member8 = 6;
 	repeated int32 member9 = 9;
+	bool member10 = 10;
 }
 
 message Message2 {
@@ -31,5 +32,6 @@ message Message2 {
 	float member4 = 4;
 	Message1 member5 = 5;
 	Message3 member6 = 6;
+	map<string, int32> member7 = 7;
 }
 

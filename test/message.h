@@ -4,7 +4,7 @@
 #include <string>
 #include <map>
 
-enum Enum
+enum Enum : int
 {
 	EnFlag1,
 	EnFlag2
@@ -21,6 +21,7 @@ struct Message1
 	std::string member7;
 	std::map<std::string, int32_t> member8;
 	std::vector<int32_t> member9;
+	bool member10;
 };
 
 struct Message2
@@ -37,5 +38,6 @@ struct Message2
 	float member4;
 	Message1 member5;
 	Message3 member6;
+	std::map<int32_t, bool> member7;
 };
 
