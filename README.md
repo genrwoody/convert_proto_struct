@@ -7,7 +7,7 @@
 
 支持的Protobuf类型:
 1. 基本类型, 如int32, int64, bool, Enum, string等
-2. 容器, repeated, 以string做为key的map
+2. 容器, repeated, map
 
 不支持: oneof
 
