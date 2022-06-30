@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 
 project(convert_proto_struct)
 
-find_package(protobuf CONFIG REQUIRED)
+find_package(Protobuf REQUIRED)
 include_directories(${Protobuf_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS

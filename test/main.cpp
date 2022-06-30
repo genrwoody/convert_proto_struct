@@ -47,11 +47,16 @@ int main()
 		printf("struct to proto failed.\n");
 		return -1;
 	}
+	proto_msg.PrintDebugString();
 	Message2 struct_msg;
 	if (!cps::ProtoToStruct(proto_msg, struct_msg)) {
 		printf("proto to struct failed.\n");
 		return -1;
 	}
+	if (!(struct_msg == msg2)) {
+		printf("proto to struct failed.\n");
+	}
+	printf("test success!\n");
 	return 0;
 }
 
